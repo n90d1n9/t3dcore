@@ -4,9 +4,11 @@
 /// generation from rendering allows the same Scene3D to target multiple
 /// backends (Flutter3DController, ThreeJS, Filament, Babylon, WebGPU, etc.)
 /// without changing chart code.
-library backend;
+library;
 
-import 'scene_graph.dart';
+import 'dart:typed_data';
+
+import '../scene/scene_graph.dart';
 
 /// Abstract base class for renderer backends.
 ///
@@ -53,10 +55,7 @@ class GLTFBackend extends RendererBackend {
 ///
 /// Targets flutter_3d_controller's model-viewer wrapper.
 class FlutterBackend extends RendererBackend {
-  const FlutterBackend({
-    this.autoOrbit = false,
-    this.rotationSpeed = 12,
-  });
+  const FlutterBackend({this.autoOrbit = false, this.rotationSpeed = 12});
 
   final bool autoOrbit;
   final int rotationSpeed;

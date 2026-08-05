@@ -3,10 +3,10 @@
 /// Modern engines never regenerate identical meshes. This cache stores
 /// pre-built primitive meshes that can be reused across multiple entities,
 /// reducing memory usage and improving performance.
-library geometry_cache;
+library;
 
-import 'scene_graph.dart';
-import 'mesh_builder.dart';
+import '../scene/mesh_builder.dart';
+import '../scene/scene_graph.dart';
 
 /// Cache of commonly used geometry primitives.
 class GeometryCache {
@@ -54,11 +54,7 @@ class GeometryCache {
 
     // Create a unit cylinder (approximated as a tall thin cuboid for now)
     // TODO: Add proper cylinder builder to MeshBuilder
-    _cylinder = MeshBuilder.cuboid(
-      sizeX: 1.0,
-      sizeY: 1.0,
-      sizeZ: 1.0,
-    );
+    _cylinder = MeshBuilder.cuboid(sizeX: 1.0, sizeY: 1.0, sizeZ: 1.0);
 
     // Create a unit plane
     _plane = MeshBuilder.groundPlane(width: 1.0, depth: 1.0, thickness: 0.01);

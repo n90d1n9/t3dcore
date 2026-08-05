@@ -2,9 +2,9 @@
 ///
 /// Evolves the simple Material3D into a hierarchy of material types
 /// supporting PBR, Phong, Unlit, Wireframe, Gradient, Heatmap, and custom shaders.
-library material;
+library;
 
-import 'scene_graph.dart';
+import '../scene/scene_graph.dart';
 
 /// Base class for all material types.
 abstract class Material {
@@ -29,10 +29,10 @@ class PBRMaterial extends Material {
     this.emissive = const [0.0, 0.0, 0.0],
     this.normalScale = 1.0,
     this.occlusionStrength = 1.0,
-    String? name,
-    bool doubleSided = false,
-    double opacity = 1.0,
-  }) : super(name: name, doubleSided: doubleSided, opacity: opacity);
+    super.name,
+    super.doubleSided,
+    super.opacity,
+  });
 
   /// RGBA base color factor [r, g, b, a].
   final List<double> baseColor;
@@ -58,7 +58,11 @@ class PBRMaterial extends Material {
       baseColor: [baseColor[0], baseColor[1], baseColor[2]],
       metallic: metallic,
       roughness: roughness,
-      opacity: opacity < 1.0 ? opacity : baseColor.length > 3 ? baseColor[3] : 1.0,
+      opacity: opacity < 1.0
+          ? opacity
+          : baseColor.length > 3
+          ? baseColor[3]
+          : 1.0,
       name: name,
     );
   }
@@ -171,11 +175,7 @@ class GradientMaterial extends Material {
 }
 
 /// Type of gradient interpolation.
-enum GradientType {
-  linear,
-  radial,
-  spherical,
-}
+enum GradientType { linear, radial, spherical }
 
 /// Heatmap material for data visualization.
 class HeatmapMaterial extends Material {
@@ -213,14 +213,7 @@ class HeatmapMaterial extends Material {
 }
 
 /// Predefined color maps for heatmaps.
-enum ColorMap {
-  viridis,
-  plasma,
-  inferno,
-  magma,
-  rainbow,
-  coolwarm,
-}
+enum ColorMap { viridis, plasma, inferno, magma, rainbow, coolwarm }
 
 extension ColorMapExtension on ColorMap {
   /// Gets a color at position t (0.0 to 1.0) in this colormap.

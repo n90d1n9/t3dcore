@@ -3,9 +3,9 @@
 /// Instead of widgets manually building Scene3D, the compiler provides a
 /// reusable, testable, and optimizable pipeline that transforms chart specs
 /// into fully-formed scenes through a series of compiler passes.
-library compiler;
+library;
 
-import 'scene_graph.dart';
+import '../scene/scene_graph.dart';
 
 /// Context passed through the compilation pipeline.
 ///
@@ -143,8 +143,7 @@ class OptimizationPass extends CompilerPass {
 
 /// Compiler pipeline that orchestrates multiple passes.
 class CompilerPipeline {
-  CompilerPipeline({List<CompilerPass>? passes})
-      : _passes = passes ?? const [];
+  CompilerPipeline({List<CompilerPass>? passes}) : _passes = passes ?? const [];
 
   final List<CompilerPass> _passes;
 

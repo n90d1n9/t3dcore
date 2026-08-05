@@ -4,9 +4,10 @@
 /// architecture, allowing extensibility without continuously expanding
 /// a single class. Charts and compilers work with entities that can have
 /// any combination of components.
-library ecs;
+library;
 
-import 'scene_graph.dart';
+import '../scene/scene_graph.dart';
+
 
 /// Marker interface for all ECS components.
 abstract class Component {
