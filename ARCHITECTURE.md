@@ -1,25 +1,18 @@
-# Tenun 3D Core - Architecture Evolution
+# Tenun 3D Core Architecture
 
-This document describes the architectural improvements implemented in `tenun_3d_core` to evolve it from a simple chart-to-GLB generator into a general-purpose 3D scene engine.
+## Overview
 
-## Current State (v1)
+`tenun_3d_core` is a lightweight 3D rendering engine for data visualization, designed to serve as the 3D rendering foundation for every Tenun visualization. It has evolved from a simple wrapper around `flutter_3d_controller` into a complete rendering pipeline with backend independence.
 
-The original implementation was organized around:
-- **MeshBuilder**: Procedural mesh generation
-- **Scene3D/Node3D**: Monolithic scene graph
-- **GlbWriter**: glTF export
-- **CameraSpec**: Simple orbit-based camera presets
+## Architecture Principles
 
-This worked well for basic bar and pie charts but would become difficult to maintain as the package scales to support:
-- Surface/volume charts
-- Network graphs and Sankey diagrams
-- Terrain and GIS visualizations
-- Digital twins and BIM
-- Scientific visualization with millions of points
+1. **Separation of Concerns**: Scene generation is completely separated from rendering
+2. **Backend Independence**: Same scene can target multiple rendering backends
+3. **Component-Based Design**: ECS architecture for extensibility
+4. **Pluggable Pipeline**: Each stage of the rendering pipeline is modular
+5. **Zero Transitive Dependencies**: No external 3D/math packages required
 
-## New Architecture (v2)
-
-The evolved architecture follows modern rendering engine patterns (Filament, SceneKit, Unity DOTS, VTK):
+## Rendering Pipeline
 
 ```
 Chart Spec
@@ -57,298 +50,294 @@ Engine          System
       └── WebGPU (future)
 ```
 
-## Key Improvements
+## Package Structure
+
+```
+tenun_3d_core/
+│
+├── animation/           # Animation system
+│   └── animation.dart   # Tracks, keyframes, players, timelines
+│
+├── backend/             # Renderer backend abstraction
+│   └── renderer_backend.dart  # Multiple backend support
+│
+├── camera/              # Camera abstractions
+│   └── camera_preset.dart     # Perspective, orthographic, orbit
+│
+├── compiler/            # Chart compilation pipeline
+│   └── chart_compiler.dart    # Compiler passes, context
+│
+├── ecs/                 # Entity Component System
+│   └── entity_component_system.dart  # Entities, components, world
+│
+├── geometry/            # Geometry management
+│   └── geometry_cache.dart    # Cached primitive meshes
+│
+├── interaction/         # Picking and selection
+│   └── picker.dart            # Raycasting, selection, tooltips
+│
+├── layout/              # Layout engines
+│   └── layout_engine.dart     # Cartesian, polar, geo, tree, etc.
+│
+├── lighting/            # Lighting system
+│   └── lighting.dart          # Ambient, directional, point, spot, HDRI
+│
+├── material/            # Material system
+│   └── material_system.dart   # PBR, Phong, Unlit, Heatmap, etc.
+│
+├── scene/               # Core scene graph
+│   ├── scene_graph.dart       # Vec3, Material3D, MeshData, Node3D, Scene3D
+│   └── mesh_builder.dart      # Procedural mesh generators
+│
+├── glb_writer.dart      # glTF/GLB export
+│
+└── tenun_3d_core.dart   # Main library exports
+```
+
+## Key Components
 
 ### 1. Entity Component System (ECS)
 
-**Before:** `Node3D` with fixed properties (mesh, material, translation, rotation)
-
-**After:** Flexible entity-component architecture
+Replaces monolithic `Node3D` with flexible component-based architecture:
 
 ```dart
-// Old approach
-class Node3D {
-  final String name;
-  final MeshData mesh;
-  final Material3D material;
-  final Vec3 translation;
-  final List<double>? rotation;
-  // ... continuously growing list of properties
-}
-
-// New approach
 class Entity {
-  final EntityId id;
-  final Map<Type, Component> _components;
-  
-  void addComponent<T extends Component>(T component);
-  T? getComponent<T extends Component>();
-  bool hasComponent<T extends Component>();
+  EntityId id;
+  Map<Type, Component> components;
 }
 
-// Components are modular
-class TransformComponent implements Component { ... }
-class MeshComponent implements Component { ... }
-class MaterialComponent implements Component { ... }
-class MetadataComponent implements Component { ... }
-class VisibilityComponent implements Component { ... }
-class BoundsComponent implements Component { ... }
-class AnimationComponent implements Component { ... }
-class SelectableComponent implements Component { ... }
+// Components
+TransformComponent  // position, rotation, scale
+MeshComponent       // mesh reference
+MaterialComponent   // material reference
+MetadataComponent   // chart data linkage
+VisibilityComponent // visibility control
+BoundsComponent     // spatial bounds
+AnimationComponent  // animation state
+SelectableComponent // interaction state
 ```
 
-**Benefits:**
-- Extensible without modifying core classes
-- Better memory layout for cache efficiency
-- Enables system-based processing
-- Supports arbitrary entity types beyond just meshes
+### 2. Chart Compiler Pipeline
 
-### 2. Geometry Cache
-
-**Before:** Every rebuild creates new meshes
-
-```dart
-// Inefficient: regenerates identical meshes
-for (var i = 0; i < data.length; i++) {
-  final mesh = MeshBuilder.cuboid(...);
-}
-```
-
-**After:** Shared geometry cache
-
-```dart
-final cache = GeometryCache();
-final cubeMesh = cache.cube; // Reused across all instances
-
-for (var i = 0; i < data.length; i++) {
-  // Just apply different transforms to the same mesh
-}
-```
-
-**Benefits:**
-- Reduced memory usage
-- Faster scene generation
-- Enables GPU instancing (future)
-
-### 3. Chart Compiler Pipeline
-
-**Before:** Widgets manually build scenes
-
-```dart
-class BarChartWidget {
-  Scene3D _buildScene() {
-    // Manual scene construction
-  }
-}
-```
-
-**After:** Compiler pipeline with passes
+Modular compilation through composable passes:
 
 ```dart
 abstract class ChartCompiler<T> {
-  Scene3D compile(T chartConfig, CompileContext context);
+  Scene3D compile(T config, CompileContext context);
 }
 
 abstract class CompilerPass {
   void execute(Scene3D scene, CompileContext context);
 }
 
-// Modular passes
-class LayoutPass extends CompilerPass { ... }
-class GeometryPass extends CompilerPass { ... }
-class MaterialPass extends CompilerPass { ... }
-class AnimationPass extends CompilerPass { ... }
-class OptimizationPass extends CompilerPass { ... }
+// Built-in passes
+LayoutPass      // Position elements
+GeometryPass    // Generate meshes
+MaterialPass    // Assign materials
+AnimationPass   // Setup animations
+OptimizationPass // Optimize scene
 ```
 
-**Benefits:**
-- Reusable compilation logic
-- Testable individual passes
-- Optimizable before export
-- Easy to add new chart types
+### 3. Geometry Cache
 
-### 4. Material System Hierarchy
-
-**Before:** Single `Material3D` class
+Shared geometry prevents redundant mesh generation:
 
 ```dart
-class Material3D {
-  final List<double> baseColor;
-  final double metallic;
-  final double roughness;
-  final double opacity;
+class GeometryCache {
+  MeshData cube;      // Reusable unit cube
+  MeshData sphere;    // Reusable unit sphere
+  MeshData cylinder;  // Reusable unit cylinder
+  MeshData plane;     // Reusable unit plane
 }
 ```
 
-**After:** Material hierarchy
+### 4. Material System
+
+Hierarchical material types:
 
 ```dart
 abstract class Material {
   Material3D toMaterial3D();
 }
 
-class PBRMaterial extends Material { ... }
-class PhongMaterial extends Material { ... }
-class UnlitMaterial extends Material { ... }
-class WireframeMaterial extends Material { ... }
-class GradientMaterial extends Material { ... }
-class HeatmapMaterial extends Material { ... }
+class PBRMaterial extends Material {}      // Physically based
+class PhongMaterial extends Material {}    // Classic Blinn-Phong
+class UnlitMaterial extends Material {}    // Flat shading
+class WireframeMaterial extends Material {} // Technical viz
+class GradientMaterial extends Material {}  // Color transitions
+class HeatmapMaterial extends Material {}   // Data-driven colors
 ```
-
-**Benefits:**
-- Charts don't know material implementation
-- Easy to add new material types
-- Backend can choose optimal representation
 
 ### 5. Renderer Backend Abstraction
 
-**Before:** Tied to `flutter_3d_controller` / model-viewer
-
-```dart
-// Only one backend possible
-final glb = GlbWriter.build(scene);
-controller.loadGlb(glb);
-```
-
-**After:** Multiple backend support
+Same scene, multiple targets:
 
 ```dart
 abstract class RendererBackend {
   Future<dynamic> build(Scene3D scene);
 }
 
-class GLTFBackend extends RendererBackend { ... }
-class FlutterBackend extends RendererBackend { ... }
-class ThreeJSBackend extends RendererBackend { ... }
-class FilamentBackend extends RendererBackend { ... }
-class BabylonBackend extends RendererBackend { ... }
-class WebGPUBackend extends RendererBackend { ... }
-
-// Usage
-final backend = GLTFBackend();
-final result = await backend.build(scene);
+class GLTFBackend extends RendererBackend {}    // Export GLB
+class FlutterBackend extends RendererBackend {} // flutter_3d_controller
+class ThreeJSBackend extends RendererBackend {} // Three.js (future)
+class FilamentBackend extends RendererBackend {} // Filament (future)
+class WebGPUBackend extends RendererBackend {}  // WebGPU (future)
 ```
 
-**Benefits:**
-- Same scene targets multiple renderers
-- Future-proof architecture
-- Backend-specific optimizations possible
-- No chart code changes needed when adding backends
+### 6. Animation System
 
-### 6. Compile Context
-
-Centralized configuration passed through the compilation pipeline:
+Full animation framework:
 
 ```dart
-class CompileContext {
-  final Theme3D? theme;
-  final dynamic geometryCache;
-  final RenderSettings renderSettings;
+class AnimationClip {
+  String name;
+  List<AnimationTrack> tracks;
+  double duration;
+  bool loop;
 }
 
-class RenderSettings {
-  final bool enableAnimations;
-  final bool enableShadows;
-  final bool lodEnabled;
-  final bool instancingEnabled;
-  final int maxLOD;
+class AnimationTrack<T> {
+  String targetPath;
+  List<Keyframe<T>> keyframes;
+  T getValueAtTime(double time);
+}
+
+class AnimationPlayer {
+  void play();
+  void pause();
+  void seek(double time);
+  void update(double deltaTime);
 }
 ```
 
-**Benefits:**
-- Consistent configuration across passes
-- Easy to add new settings
-- Theme support built-in
+### 7. Lighting System
 
-## Package Structure
+Multiple light types:
 
+```dart
+class AmbientLight extends Light {}       // Uniform illumination
+class DirectionalLight extends Light {}   // Sun-like parallel rays
+class PointLight extends Light {}         // Omnidirectional point source
+class SpotLight extends Light {}          // Cone-shaped spotlight
+class HemisphereLight extends Light {}    // Sky/ground blend
+class HDRILight extends Light {}          // Image-based lighting
 ```
-tenun_3d_core/
-│
-├── animation/           # Animation clips, timelines, keyframes
-├── backend/             # Renderer backend abstraction
-│   └── renderer_backend.dart
-├── camera/              # Camera systems (existing + enhanced)
-├── compiler/            # Chart compilation pipeline
-│   └── chart_compiler.dart
-├── ecs/                 # Entity Component System
-│   └── entity_component_system.dart
-├── exporter/            # Multi-format export (GLB, glTF, OBJ, etc.)
-├── geometry/            # Mesh builders and cache
-│   └── geometry_cache.dart
-├── interaction/         # Picking, hit testing, selection
-├── layout/              # Layout engines (Cartesian, Polar, Geo, etc.)
-├── lighting/            # Light types and systems
-├── material/            # Material hierarchy
-│   └── material_system.dart
-├── math/                # Coordinate systems, transforms
-├── optimizer/           # Scene optimization passes
-├── renderer/            # High-level render orchestration
-├── scene/               # Scene graph (existing)
-└── utils/               # Utilities
+
+### 8. Interaction System
+
+Pluggable picking implementations:
+
+```dart
+abstract class Picker {
+  PickResult pick(Ray ray, World world);
+}
+
+class NullPicker extends Picker {}       // No picking support
+class LegendPicker extends Picker {}     // Metadata-based (current)
+class RaycastPicker extends Picker {}    // Ray-triangle intersection (future)
+
+class SelectionManager {
+  void select(EntityId id);
+  void deselect(EntityId id);
+  void setHovered(EntityId? id);
+}
 ```
+
+### 9. Layout Engines
+
+Multiple layout algorithms:
+
+```dart
+abstract class LayoutEngine {
+  List<(Vec3, Map<String, dynamic>)> computeLayout(
+    List<Map<String, dynamic>> data,
+    LayoutContext context,
+  );
+}
+
+class CartesianLayout extends LayoutEngine {}  // Bar charts, scatter
+class PolarLayout extends LayoutEngine {}      // Pie, radar
+class GeoLayout extends LayoutEngine {}        // Map visualizations
+class TreeLayout extends LayoutEngine {}       // Hierarchical data
+class ForceLayout extends LayoutEngine {}      // Network graphs
+class SurfaceLayout extends LayoutEngine {}    // 3D surfaces
+class HexLayout extends LayoutEngine {}        // Hexagonal grids
+```
+
+## Use Cases
+
+### Current
+- Bar charts (cuboid meshes)
+- Pie/donut charts (pie slice meshes)
+- Line charts (tube segments)
+- Scatter plots (spheres)
+- Geo charts (radial pins on sphere)
+
+### Future (enabled by this architecture)
+- Surface charts
+- Volume charts
+- Network graphs (force-directed layout)
+- Sankey 3D
+- Terrain visualization
+- Digital twins
+- BIM/CAD viewers
+- Scientific visualization
+- Millions of points (via instancing)
 
 ## Migration Path
 
-### Phase 1: Foundation (Current)
-- [x] ECS implementation
-- [x] Geometry cache
-- [x] Compiler pipeline skeleton
-- [x] Material system
-- [x] Backend abstraction
+### From v0.x to v1.0
 
-### Phase 2: Enhancement
-- [ ] Implement actual compiler passes
-- [ ] Add more geometry primitives
-- [ ] Complete material conversions
-- [ ] Connect GLTFBackend to GlbWriter
+1. **Existing code continues to work** - `Scene3D`, `Node3D`, `MeshBuilder` remain
+2. **Gradual adoption** of new systems:
+   - Start using `GeometryCache` for shared primitives
+   - Adopt `ChartCompiler` pattern for new chart types
+   - Use `LayoutEngine` for automatic positioning
+   - Leverage `Material` hierarchy for advanced materials
 
-### Phase 3: Advanced Features
-- [ ] Animation system (timeline, tracks, keyframes)
-- [ ] Lighting system (ambient, directional, point, spot)
-- [ ] Label engine (billboard, screen-aligned, leader lines)
-- [ ] Axis engine (Cartesian, Polar, Geo, Log, Time)
-- [ ] Layout engines (Grid, Polar, Tree, Treemap, Force)
-- [ ] Scene optimizer (merge meshes, LOD, instance, sort)
+3. **Future enhancements** without breaking changes:
+   - Add GPU instancing support
+   - Implement proper raycasting picker
+   - Add more renderer backends
+   - Extend animation system
 
-### Phase 4: Multiple Backends
-- [ ] Three.js backend
-- [ ] Filament backend
-- [ ] Babylon.js backend
-- [ ] WebGPU backend
+## Benefits
 
-### Phase 5: Production Ready
-- [ ] Comprehensive tests
-- [ ] Performance benchmarks
-- [ ] Documentation
-- [ ] Example applications
+1. **Testability**: Compiler passes are isolated and testable
+2. **Reusability**: Shared geometry cache reduces memory
+3. **Extensibility**: ECS allows adding features without modifying core classes
+4. **Performance**: Optimization passes improve rendering efficiency
+5. **Flexibility**: Backend independence enables multiple render targets
+6. **Maintainability**: Clear separation of concerns
 
-## Benefits Summary
+## Example Usage
 
-This evolution transforms `tenun_3d_core` from a **chart-to-GLB generator** into a **general-purpose 3D scene engine**:
+```dart
+// Using the compiler pipeline
+final compiler = BarChartCompiler();
+final context = CompileContext(
+  theme: Theme3D(),
+  geometryCache: GeometryCache(),
+  renderSettings: RenderSettings(enableAnimations: true),
+);
 
-1. **Scalability**: Handles millions of elements via instancing and LOD
-2. **Flexibility**: New chart types are just new compilers
-3. **Performance**: Geometry caching and optimization passes
-4. **Extensibility**: ECS allows unlimited entity types
-5. **Future-proof**: Backend independence enables multiple rendering targets
-6. **Maintainability**: Separated concerns, modular design
-7. **Testability**: Each component/pass can be tested independently
+final scene = compiler.compile(chartConfig, context);
 
-## Use Cases Enabled
+// Using different backends
+final gltfBackend = GLTFBackend();
+final glbBytes = await gltfBackend.build(scene);
 
-Beyond the current bar/pie charts, this architecture supports:
+final flutterBackend = FlutterBackend();
+final viewerConfig = await flutterBackend.build(scene);
 
-- **Dashboards**: Multiple coordinated 3D views
-- **CAD-like visualizations**: Precise geometry with snapping
-- **Scientific plots**: Volume rendering, isosurfaces, vector fields
-- **Digital twins**: Real-time data-driven 3D models
-- **GIS viewers**: Geographic coordinates, terrain, map overlays
-- **Network graphs**: Force-directed layouts in 3D
-- **Sankey diagrams**: Flow visualization
-- **BIM**: Building information modeling
-- **Game-style visualizations**: Interactive 3D experiences
+// Using animation
+final player = AnimationPlayer(
+  autoPlay: true,
+  onUpdate: (time) => print('Animating at $time'),
+);
+player.setClip(myAnimationClip);
 
-## Conclusion
-
-The current implementation already resembles a miniature rendering engine. This architectural evolution makes that explicit and provides the foundation for `tenun_3d_core` to serve not just Tenun charts, but any 3D data visualization need while allowing different rendering backends to evolve independently.
+// Using layout engine
+final layout = CartesianLayout(orientation: AxisOrientation.yUp);
+final positions = layout.computeLayout(data, LayoutContext());
+```
