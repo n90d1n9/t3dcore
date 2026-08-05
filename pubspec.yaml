@@ -1,0 +1,20 @@
+name: tenun_3d_core
+description: "Tenun Core functionality for 3D charts."
+version: 0.0.1
+homepage: https://www.linkedin.com/in/bhangun-hartani-b3859821/
+
+environment:
+  sdk: ^3.12.2
+  flutter: ">=1.17.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+
