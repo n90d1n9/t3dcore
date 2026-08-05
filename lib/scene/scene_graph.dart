@@ -18,6 +18,7 @@ class Vec3 {
   final double z;
 
   static const zero = Vec3(0, 0, 0);
+  static const one = Vec3(1, 1, 1);
 
   Vec3 operator +(Vec3 o) => Vec3(x + o.x, y + o.y, z + o.z);
   Vec3 operator -(Vec3 o) => Vec3(x - o.x, y - o.y, z - o.z);

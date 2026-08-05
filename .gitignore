@@ -1,31 +1,59 @@
-# Miscellaneous
-*.class
-*.log
+```dart
+# Compiled and build artifacts
 *.pyc
-*.swp
-.DS_Store
-.atom/
-.buildlog/
-.history
-.svn/
-migrate_working_dir/
+__pycache__/
+*.o
+*.obj
+*.exe
+*.dll
+*.so
+*.class
+*.out
 
-# IntelliJ related
-*.iml
-*.ipr
-*.iws
+# Dependencies
+node_modules/
+venv/
+.venv/
+.env
+.env.local
+.env.*
+
+# Build outputs
+dist/
+build/
+target/
+*.jar
+*.war
+*.zip
+*.tar.gz
+
+# Editors and IDEs
+.vscode/
 .idea/
+*.swp
+*.swo
+*.tmp
 
-# The .vscode folder contains launch configuration and tasks you configure in
-# VS Code which you may wish to be included in version control, so this line
-# is commented out by default.
-#.vscode/
+# Logs
+*.log
 
-# Flutter/Dart/Pub related
-# Libraries should not include pubspec.lock, per https://dart.dev/guides/libraries/private-files#pubspeclock.
-/pubspec.lock
-**/doc/api/
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Dart specific
+.dart_tool/
+.packages
+*.g.dart
+*.freezed.dart
+
+# Flutter specific
 .dart_tool/
 .flutter-plugins-dependencies
-/build/
-/coverage/
+.flutter-plugins
+```

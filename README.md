@@ -1,87 +1,101 @@
 # Tenun 3D Core
 
-3D chart rendering for [`tenun_core`](https://pub.dev/packages/tenun_core).
-A `bar3d` chart is registered into Tenun's normal `ChartRegistry` / JSON pipeline exactly like any
-other chart type — the only thing that changes is what happens after layout.
+**A lightweight 3D rendering engine for data visualization.**
+
+Tenun 3D Core has evolved from a simple chart-to-GLB generator into a general-purpose 3D scene engine with:
+
+- **Entity Component System (ECS)** - Flexible, extensible scene graph
+- **Geometry Cache** - Reusable mesh primitives for performance
+- **Compiler Pipeline** - Modular chart compilation with passes
+- **Material System** - PBR, Phong, Unlit, Wireframe, Gradient, Heatmap materials
+- **Renderer Backend Abstraction** - Target multiple rendering technologies
+- **Scene Graph** - Complete 3D scene representation
+- **glTF/GLB Export** - Hand-rolled writer, no external dependencies
+- **Camera System** - Orbit-based presets (perspective, isometric, top)
+
+## Architecture
+
+```
+Chart Spec
+     │
+     ▼
+Chart Compiler
+     │
+     ▼
+Layout Engine
+     │
+     ▼
+Scene Graph (ECS)
+     │
+     ├──────────────┐
+     │              │
+Geometry        Material
+Engine          System
+     │              │
+     └──────┬───────┘
+            ▼
+     Optimization Pass
+            ▼
+      Renderer Backend
+      ├── GLTF Export
+      ├── Flutter3DController
+      └── Future: ThreeJS, Filament, Babylon, WebGPU
+```
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed documentation.
+
+## Current Implementation (v1)
+
+The original implementation focused on bar charts and is still fully functional:
 
 ```
 ChartSpec (JSON)
       │
       ▼
-Bar3DChartConfig            (extends tenun_core's BaseChartConfig — see "Extending Tenun")
+Bar3DChartConfig
       │
       ▼
-Scene3D                     (lib/src/scene) — nodes: ground plate + one cuboid per data point
+Scene3D                     (lib/scene/)
       │
       ▼
-GlbWriter                   (lib/src/gltf) — hand-rolled glTF 2.0 binary (.glb), no external 3D deps
+GlbWriter                   (lib/glb_writer.dart)
       │
       ▼
-LocalModelServer             (lib/src/hosting) — serves the bytes over loopback HTTP
+LocalModelServer            (lib/hosting/)
       │
       ▼
-Flutter3DViewer / Flutter3DController   (flutter_3d_controller, backed by <model-viewer>)
+Flutter3DViewer             (flutter_3d_controller)
 ```
 
-## What's implemented
+### What's Implemented
 
-- **`bar3d` chart type**, registered via `register3DCharts()` / `bar3dChartRegistration`, using the
-  exact "subclass `BaseChartConfig`, tag `ChartType.custom`, override `buildChart()`" pattern from
-  tenun_core's own "Extending Tenun (Custom Charts)" guide.
-- **Multi-series grouped 3D bars** — each series gets its own row along Z, each category its own
-  column along X, so `{"series": [{"data":[...]}, {"data":[...]}]}` renders as a proper grouped 3D
-  bar chart, not just a single row.
-- **A real glTF/GLB writer** (`GlbWriter`) — positions/normals/indices packed into one binary buffer
-  per the GLB container spec (12-byte header + JSON chunk + BIN chunk), each bar exported as its own
-  mesh + PBR material (`baseColorFactor`/`metallicFactor`/`roughnessFactor`). No third-party glTF
-  package — just `dart:convert` + `dart:typed_data`.
-- **Camera presets** (`perspective` / `isometric` / `top`) mapped onto `flutter_3d_controller`'s real
-  API — `controller.setCameraOrbit(theta, phi, radius)` — with the radius scaled to the scene's own
-  bounding size so the same preset frames a 3-bar chart and a 30-bar chart sensibly.
-- **Auto-orbit** via `camera.orbit: true` → `controller.startRotation(rotationSpeed: 12)`.
+- **`bar3d` chart type** with multi-series grouped 3D bars
+- **glTF/GLB writer** - positions/normals/indices packed per GLB spec
+- **Camera presets** - perspective / isometric / top
+- **Auto-orbit** camera rotation
+- **Legend integration** - tappable category chips for selection
 
-## Deliberately *not* implemented (and why)
+### New in v2 (Foundation)
 
-- **In-scene picking/tap-to-select.** The architecture note describes `Tap -> Selection Event`, but
-  `flutter_3d_controller` wraps Google's `<model-viewer>` and does not expose raycasting or per-mesh
-  hit-testing — the viewer "handles touch events internally" for camera control only. Faking this with
-  screen-space math would require reimplementing the viewer's camera projection, which is out of scope
-  for a first pass. Instead, `Bar3DChartWidget` renders a row of tappable category chips
-  below the viewport (`onCategoryTap`) as an honest, working substitute — see `_CategoryLegend`.
-- **Studio/HDRI lighting, per-material textures.** `<model-viewer>` applies its own default environment
-  lighting; the package sets material color/roughness/metalness per bar, but doesn't attempt the
-  `lighting: { preset: studio }` / custom HDRI knobs from the original note, since that's a `<model-viewer>`
-  environment-image feature, not something the Dart-side controller exposes.
-- **Pie/line/scatter 3D meshes.** Only the bar → cuboid path is built. Adding a pie (cylinder-segment)
-  or scatter (sphere) chart is the same three steps — new `MeshBuilder` method, new `*ChartConfig`,
-  new registration — the scene/GLB/hosting layers are already shape-agnostic.
-
-## Platform setup
-
-`flutter_3d_controller` is a transitive dependency, so its install steps apply to any app using this
-package:
-
-- **Android**: add `<uses-permission android:name="android.permission.INTERNET"/>` and
-  `android:usesCleartextTraffic="true"` — required both by the viewer itself and by this package's
-  loopback HTTP server (`http://127.0.0.1:...`, not HTTPS).
-- **iOS**: set `io.flutter.embedded_views_preview` to `true` in `Info.plist`.
-- **Web**: load `assets/packages/flutter_3d_controller/assets/model_viewer.min.js` in `web/index.html`.
-
-See `flutter_3d_controller`'s own docs for the full details.
+- **ECS** - Entity-component architecture replacing monolithic Node3D
+- **Geometry Cache** - Shared mesh primitives (cube, sphere, cylinder, plane)
+- **Compiler Pipeline** - ChartCompiler, CompilerPass, CompileContext
+- **Material System** - Material hierarchy with PBR, Phong, Unlit, etc.
+- **Backend Abstraction** - RendererBackend interface for multiple targets
 
 ## Usage
 
+### Basic (v1 API - Still Supported)
+
 ```dart
 import 'package:tenun_core/tenun_core.dart';
-import 'package:tenun_3d/tenun_3d.dart';
+import 'package:tenun_3d_core/tenun_3d_core.dart';
 
 void main() {
   register3DCharts();
   runApp(const MyApp());
 }
-```
 
-```dart
 TenunChartFromJson(
   jsonConfig: {
     'type': 'bar3d',
@@ -90,25 +104,132 @@ TenunChartFromJson(
       {'name': 'Revenue', 'data': [120, 180, 260, 320]},
     ],
     'camera': {'preset': 'isometric', 'orbit': true},
-    'bar': {'size': 0.6, 'gap': 0.35},
   },
 )
 ```
 
-See `example/lib/main.dart` for a full runnable app.
+### Advanced (v2 API - New)
 
-## Files
+```dart
+import 'package:tenun_3d_core/tenun_3d_core.dart';
+
+// Create ECS world and entities
+final world = World();
+final entity = world.createEntity();
+
+// Add components
+entity.addComponent(TransformComponent(
+  position: Vec3(0, 0, 0),
+  scale: Vec3(1, 2, 1),
+));
+
+entity.addComponent(MeshComponent(
+  mesh: sharedGeometryCache.cube,
+));
+
+entity.addComponent(MaterialComponent(
+  material: PBRMaterial(
+    baseColor: [1, 0, 0, 1],
+    metallic: 0.5,
+    roughness: 0.5,
+  ),
+));
+
+// Use compiler pipeline
+final context = CompileContext(
+  geometryCache: sharedGeometryCache,
+  renderSettings: RenderSettings(
+    enableAnimations: true,
+    instancingEnabled: false,
+  ),
+);
+
+// Export via backend
+final backend = GLTFBackend();
+final glbBytes = await backend.build(scene);
+```
+
+## Package Structure
 
 ```
 lib/
-  tenun_3d.dart                        barrel + register3DCharts()
-  src/
-    scene/scene_graph.dart             Vec3, MeshData, Material3D, Node3D, Scene3D
-    scene/mesh_builder.dart            cuboid() + groundPlane()
-    gltf/glb_writer.dart               Scene3D -> .glb bytes
-    camera/camera_preset.dart          preset -> orbit angles
-    hosting/local_model_server.dart    loopback HTTP server for generated .glb bytes
-    chart/bar_chart_3d_config.dart     Bar3DChartConfig (BaseChartConfig subclass)
-    chart/bar_chart_3d_widget.dart     Bar3DChartWidget (the actual pipeline)
-example/lib/main.dart                  runnable demo
+├── animation/           # (Future) Animation system
+├── backend/             # Renderer backend abstraction
+│   └── renderer_backend.dart
+├── camera/              # Camera presets
+│   └── camera_preset.dart
+├── compiler/            # Chart compilation pipeline
+│   └── chart_compiler.dart
+├── ecs/                 # Entity Component System
+│   └── entity_component_system.dart
+├── exporter/            # (Future) Multi-format export
+├── geometry/            # Geometry cache
+│   └── geometry_cache.dart
+├── gltf/                # glTF writer
+│   └── glb_writer.dart
+├── hosting/             # Local model server
+│   └── local_model_server.dart
+├── interaction/         # (Future) Picking, selection
+├── layout/              # (Future) Layout engines
+├── legend/              # Chart legend
+│   └── chart_3d_legend.dart
+├── lighting/            # (Future) Lighting system
+├── material/            # Material system
+│   └── material_system.dart
+├── math/                # (Future) Coordinate systems
+├── optimizer/           # (Future) Scene optimization
+├── renderer/            # (Future) Render orchestration
+├── scene/               # Core scene graph
+│   ├── scene_graph.dart
+│   └── mesh_builder.dart
+└── utils/               # Utilities
+    └── color_scale.dart
 ```
+
+## Platform Setup
+
+`flutter_3d_controller` is a transitive dependency:
+
+- **Android**: Add `<uses-permission android:name="android.permission.INTERNET"/>` and `android:usesCleartextTraffic="true"`
+- **iOS**: Set `io.flutter.embedded_views_preview` to `true` in `Info.plist`
+- **Web**: Load `assets/packages/flutter_3d_controller/assets/model_viewer.min.js` in `web/index.html`
+
+## Migration Path
+
+| Phase | Status | Focus |
+|-------|--------|-------|
+| 1. Foundation | ✅ Complete | ECS, Geometry Cache, Compiler, Materials, Backends |
+| 2. Enhancement | 🔄 Next | Implement passes, connect backends |
+| 3. Advanced Features | ⏳ Planned | Animation, Lighting, Labels, Layout Engines |
+| 4. Multiple Backends | ⏳ Planned | ThreeJS, Filament, Babylon, WebGPU |
+| 5. Production Ready | ⏳ Planned | Tests, Benchmarks, Documentation |
+
+## Benefits
+
+This evolution transforms `tenun_3d_core` from a **chart-to-GLB generator** into a **general-purpose 3D scene engine**:
+
+1. **Scalability** - Handles millions of elements via instancing and LOD
+2. **Flexibility** - New chart types are just new compilers
+3. **Performance** - Geometry caching and optimization passes
+4. **Extensibility** - ECS allows unlimited entity types
+5. **Future-proof** - Backend independence enables multiple rendering targets
+6. **Maintainability** - Separated concerns, modular design
+7. **Testability** - Each component/pass can be tested independently
+
+## Use Cases Enabled
+
+Beyond bar/pie charts, this architecture supports:
+
+- Dashboards with multiple coordinated 3D views
+- CAD-like visualizations with precise geometry
+- Scientific plots (volume rendering, isosurfaces)
+- Digital twins with real-time data
+- GIS viewers with geographic coordinates
+- Network graphs with force-directed layouts
+- Sankey diagrams for flow visualization
+- BIM (Building Information Modeling)
+- Game-style interactive 3D experiences
+
+## License
+
+See [LICENSE](LICENSE) file.
